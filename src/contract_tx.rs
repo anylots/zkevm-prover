@@ -1,13 +1,16 @@
+extern crate types as prove_types;
+use prove_types::eth::BlockTrace;
 use ethers::prelude::*;
 use ethers::signers::Wallet;
 use ethers::types::{Address};
 use std::{error::Error, str::FromStr, sync::Arc};
+use ethers::providers::{Http, Provider};
 
 const CONTRACT_ADDRESS: &str = "0xf646fb8e8f78cf032663d1879ccaa967903741da";
 const PRIVATE_KEY: &str = "0fd69a11726700cae9c24e2861d81f0fbfc93ef815d6a6c66ec52d8999048851";
 #[tokio::main]
 
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn test() -> Result<(), Box<dyn Error>> {
 
     let result = call().await;
     match result {
@@ -17,6 +20,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             Err(e)
         }
     }
+    
 }
 
 async fn call() -> Result<(), Box<dyn Error>> {
