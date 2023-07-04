@@ -56,7 +56,7 @@ async fn main() {
 
             let solidity = prover.create_solidity_verifier(&proof);
             println!("=========================>verify solidity is : {:?}", proof);
-            let mut folder = PathBuf::from_str("./").unwrap();
+            let mut folder = PathBuf::from_str("./verifier").unwrap();
             io::write_verify_circuit_solidity(&mut folder, &Vec::<u8>::from(solidity.as_bytes()))
         }
         Err(e) => {
