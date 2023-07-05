@@ -44,7 +44,7 @@ async fn prove_service(param: String)-> String  {
     //step 1. fetch block trace
     let prove_request: ProveRequest = serde_json::from_str(param.as_str()).unwrap();
     let provider = Provider::<Http>::try_from(prove_request.rpc)
-        .expect("mock-testnet: failed to initialize ethers Provider");
+        .expect("failed to initialize ethers Provider");
 
     let block_traces = utils::get_block_traces_by_number(&provider, prove_request.block_num, prove_request.block_num + 1).await.unwrap();
 

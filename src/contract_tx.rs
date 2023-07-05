@@ -23,7 +23,7 @@ async fn test() -> Result<(), Box<dyn Error>> {
 }
 
 async fn call() -> Result<(), Box<dyn Error>> {
-    let provider: Provider<Http> = Provider::<Http>::try_from("http://8.217.116.59:9933")?;
+    let provider: Provider<Http> = Provider::<Http>::try_from("http://127.0.0.1:8569")?;
     let wallet: LocalWallet = Wallet::from_str(PRIVATE_KEY)?;
 
     let signer = Arc::new(SignerMiddleware::new(
@@ -49,13 +49,15 @@ async fn call() -> Result<(), Box<dyn Error>> {
 }
 
 async fn deploy() -> Result<(), Box<dyn Error>> {
-    let provider: Provider<Http> = Provider::<Http>::try_from("http://8.217.116.59:9933")?;
+    let provider: Provider<Http> = Provider::<Http>::try_from("http://127.0.0.1:8569")?;
     let wallet: LocalWallet = Wallet::from_str(PRIVATE_KEY)?;
 
     let signer = Arc::new(SignerMiddleware::new(
         provider.clone(),
         wallet.with_chain_id(9000 as u64),
     ));
+    // let factory = ContractFactory::new(abi, bytecode, client.clone());
+
 
     abigen!(TestZkEVM, "./resource/abi/TestZkEVM.json");
     let a: u64 = 10;

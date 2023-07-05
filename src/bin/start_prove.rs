@@ -73,6 +73,7 @@ async fn main() {
  * create prover of zkevm
  */
 fn create_prover(params_path: String) -> Prover {
+
     let params = load_or_create_params(params_path.as_str(), *DEGREE)
         .expect("failed to load or create kzg params");
     let agg_params = load_or_create_params(params_path.as_str(), *AGG_DEGREE)
