@@ -1,12 +1,16 @@
+use std::time::Duration;
 use std::{sync::Arc, thread};
-use tokio::sync::Mutex;
+// use tokio::sync::Mutex;
+use std::sync::Mutex;
 
+use axum::extract::Extension;
 use axum::{routing::post, Router};
 use env_logger::Env;
 use ethers::providers::{Http, Provider};
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 use tower_http::add_extension::AddExtensionLayer;
-use axum::extract::Extension;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use zkevm::prover::{AggCircuitProof, Prover};
@@ -18,9 +22,6 @@ struct ProveRequest {
     block_num: u64,
     rpc: String,
 }
-
-unsafe impl Send for ProveRequest {}
-unsafe impl Sync for ProveRequest {}
 
 /**
  * Start Server.
@@ -37,7 +38,7 @@ async fn main() {
 
     let service = Router::new()
         .route("/prove_block", post(add_queue))
-        .layer(AddExtensionLayer::new(task_queue))
+        .layer(AddExtensionLayer::new(Arc::clone(&task_queue)))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 
@@ -46,12 +47,37 @@ async fn main() {
         .serve(service.into_make_service())
         .await
         .unwrap();
+
+    // let req_param =String::from("{\"block_num\":4,\"rpc\":\"127.0.0.1:8569\"}");
+
+    let request = ProveRequest {
+        block_num: 4,
+        rpc: String::from("127.0.0.1:8569"),
+    };
+    task_queue.lock().unwrap().push(request);
+}
+
+/**
+ * Prove service.
+ * Handle Prove Request, Use Layer2's rpc address and block number to fetch trace and generate zk proof.
+ */
+async fn add_queue(
+    Extension(queue): Extension<Arc<Mutex<Vec<ProveRequest>>>>,
+    param: String,
+) -> String {
+    //step 1. fetch block trace
+    let prove_request: ProveRequest = serde_json::from_str(param.as_str()).unwrap();
+    queue.lock().unwrap().push(prove_request);
+    String::from("success")
 }
 
 async fn prove_for_queue(task_queue: Arc<Mutex<Vec<ProveRequest>>>) {
     loop {
-        let queue = task_queue.lock().await;
-        let prove_request = queue.get(0).unwrap();
+        let queue = task_queue.lock().unwrap().pop();
+        if !queue.is_some() {
+            continue;
+        }
+        let prove_request = queue.unwrap();
         let provider = Provider::<Http>::try_from(prove_request.rpc.clone())
             .expect("failed to initialize ethers Provider");
 
@@ -80,27 +106,22 @@ async fn prove_for_queue(task_queue: Arc<Mutex<Vec<ProveRequest>>>) {
             }
         };
 
-        //step4. return prove result
-        let data = serde_json::to_string(&proof).unwrap();
-        // data
+        log::info!("prove result is: {:#?}", proof);
+        //save proof
+        let mut proof_path = PathBuf::from("./proof").join("test.proof");
+        fs::create_dir_all(&proof_path).unwrap();
+        proof.write_to_dir(&mut proof_path);
+
+        thread::sleep(Duration::from_millis(1000))
     }
 }
 
-/**
- * Prove service.
- * Handle Prove Request, Use Layer2's rpc address and block number to fetch trace and generate zk proof.
- */
-async fn add_queue(
-    Extension(info): Extension<Arc<Mutex<Vec<ProveRequest>>>>,
-    param: String,
-) -> String {
-    format!(
-        "Sigined User: {}",
-        info.lock().await.get(0).unwrap().block_num
-    );
-
-    //step 1. fetch block trace
-    let prove_request: ProveRequest = serde_json::from_str(param.as_str()).unwrap();
-    info.lock().await.push(prove_request);
-    String::from("success")
+#[tokio::test]
+async fn test() {
+    let request = ProveRequest {
+        block_num: 4,
+        rpc: String::from("127.0.0.1:8569"),
+    };
+    let info = serde_json::to_string(&request);
+    println!("{:?}", info.unwrap());
 }
