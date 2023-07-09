@@ -38,7 +38,7 @@ async fn main() {
 
     let service = Router::new()
         .route("/prove_block", post(download_trace))
-        .layer(AddExtensionLayer::new(Arc::clone(&task_queue)))
+        // .layer(AddExtensionLayer::new(Arc::clone(&task_queue)))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 
