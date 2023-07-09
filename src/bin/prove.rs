@@ -18,30 +18,10 @@ use zkevm_prover::utils;
 #[tokio::main]
 async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
-    let block_num: u64 = var("PROVERD_BLOCK_NUM")
-        .expect("PROVERD_BLOCK_NUM env var")
-        .parse()
-        .expect("Cannot parse PROVERD_BLOCK_NUM env var");
-    let rpc_url: String = var("PROVERD_RPC_URL")
-        .expect("PROVERD_RPC_URL env var")
-        .parse()
-        .expect("Cannot parse PROVERD_RPC_URL env var");
-    let params_path: String = var("PARAMS_PATH")
-        .expect("PARAMS_PATH env var")
-        .parse()
-        .expect("Cannot parse PARAMS_PATH env var");
 
-    let provider = Provider::<Http>::try_from(rpc_url)
-        .expect("failed to initialize ethers Provider");
-
-    //step 1. fetch block trace
-    let block_traces = utils::get_block_traces_by_number(&provider, block_num, block_num + 1)
-        .await
-        .unwrap();
-
-    log::info!("block_traces_len is: {:#?}", block_traces.len());
-
-    log::info!("block_traces_chain_id is: {:#?}", block_traces[0].chain_id);
+    //load traces
+    let proof_vec = read_from_file(&path);
+    let proof = serde_json::from_slice::<TargetCircuitProof>(proof_vec.as_slice()).unwrap();
 
     //step 2. create prover
     let mut prover = create_prover(params_path);
