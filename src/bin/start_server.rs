@@ -60,7 +60,7 @@ async fn download_trace(param: String) -> String {
     let prove_request: ProveRequest = serde_json::from_str(param.as_str()).unwrap();
     let provider = Provider::<Http>::try_from(prove_request.rpc.clone())
         .expect("failed to initialize ethers Provider");
-    let block_traces = utils::get_block_traces_by_number
+    let block_traces: Option<Vec<types::eth::BlockTrace>> = utils::get_block_traces_by_number
     (&provider, prove_request.block_num, prove_request.block_num + 1,).await;
     if block_traces.is_none(){
         String::from("fetch block trace fail");
