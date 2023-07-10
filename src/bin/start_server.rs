@@ -2,6 +2,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::{sync::Arc, thread};
 // use tokio::sync::Mutex;
+use std::io::{BufRead, BufReader, Write};
 use std::sync::Mutex;
 
 use axum::extract::Extension;
@@ -10,8 +11,8 @@ use env_logger::Env;
 use ethers::providers::{Http, Provider};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use std::io::{BufReader, Read, Write};
 use std::path::PathBuf;
+use std::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task;
 use tower_http::add_extension::AddExtensionLayer;
 use tower_http::cors::CorsLayer;
@@ -25,7 +26,10 @@ struct ProveRequest {
     rpc: String,
 }
 
-const PROVER_FOR_TRACES: &'static str = "/target/release/prove";
+const PROVER_FOR_TRACES: &'static str = "target/release/prove";
+const TRACES_PROCESSING: &'static str = "traces/processing";
+const TRACES_PROVED: &'static str = "traces/proved";
+const PROOF: &'static str = "proof";
 
 /**
  * Start Server.
@@ -34,15 +38,21 @@ const PROVER_FOR_TRACES: &'static str = "/target/release/prove";
 #[tokio::main]
 async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
-    fs::create_dir_all("traces/processing").unwrap();
-    fs::create_dir_all("traces/proved").unwrap();
-    fs::create_dir_all("proof").unwrap();
+    fs::create_dir_all(TRACES_PROCESSING).unwrap();
+    fs::create_dir_all(TRACES_PROVED).unwrap();
+    fs::create_dir_all(PROOF).unwrap();
 
-    task::spawn(prove_for_trace());
+    let (tx, rx) = channel();
+    prove_for_trace(tx, rx);
+
+    let status =true;
+    let prove_status = Arc::new(Mutex::new(status));
 
     let service = Router::new()
         .route("/prove_block", post(download_trace))
-        // .layer(AddExtensionLayer::new(Arc::clone(&task_queue)))
+        .route("/download_proof", post(download_trace))
+        .route("/status", post(download_trace))
+        .layer(AddExtensionLayer::new(Arc::clone(&prove_status)))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 
@@ -51,6 +61,44 @@ async fn main() {
         .serve(service.into_make_service())
         .await
         .unwrap();
+}
+
+async fn prove_process(sender: Sender<String>) {
+    //start prover process
+    let mut prover_bin = Command::new(PROVER_FOR_TRACES).spawn().unwrap();
+    prover_bin.wait().unwrap();
+    let mut f = BufReader::new(prover_bin.stdout.unwrap());
+    loop {
+        let mut buf = String::new();
+        match f.read_line(&mut buf) {
+            Ok(_) => {
+                sender.send(buf).unwrap();
+                continue;
+            }
+
+            Err(e) => {
+                println!("an error!: {:?}", e);
+                break;
+            }
+        }
+    }
+    println!("prover_bin end");
+}
+
+fn prove_for_trace(sender: Sender<String>, rx: Receiver<String>) {
+    task::spawn(prove_process(sender));
+    task::spawn(async {
+        for line in rx {
+            println!("prover: {}", line);
+        }
+    });
+    task::spawn(async {
+        loop {
+            let traces_dir = fs::read_dir("traces/processing").unwrap();
+            let file = traces_dir.last().unwrap().unwrap().path().is_file();
+            std::thread::sleep(Duration::from_millis(10000))
+        }
+    });
 }
 
 /**
@@ -76,7 +124,11 @@ async fn download_trace(param: String) -> String {
     let traces_path =
         PathBuf::from("traces").join(format!("block#{}.json", prove_request.block_num));
     let mut traces_file = File::create(traces_path).unwrap();
-    let save = traces_file.write_all(serde_json::to_string(&block_traces.unwrap().last()).unwrap().as_bytes());
+    let save = traces_file.write_all(
+        serde_json::to_string(&block_traces.unwrap().last())
+            .unwrap()
+            .as_bytes(),
+    );
     match save {
         Ok(()) => {
             log::info!("save traces successfully!");
@@ -87,11 +139,4 @@ async fn download_trace(param: String) -> String {
             String::from("save trace fail")
         }
     }
-}
-
-async fn prove_for_trace() {
-    //start prover process
-    let mut prover_bin = Command::new(PROVER_FOR_TRACES).spawn().unwrap();
-    prover_bin.wait().unwrap();
-    println!("prover_bin end");
 }

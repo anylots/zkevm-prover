@@ -22,14 +22,14 @@ async fn main() {
         let traces_dir = fs::read_dir("traces/processing").unwrap();
         let path = traces_dir.last().unwrap().unwrap().path();
         let traces = utils::get_block_trace_from_file(path.clone());
-        let result = prover.create_agg_circuit_proof_batch(vec![traces].as_slice());
         //step 3. start prove
+        let result = prover.create_agg_circuit_proof_batch(vec![traces].as_slice());
         match result {
             Ok(proof) => {
                 log::info!("prove result is: {:#?}", proof);
                 //step 4. save proof
                 let mut proof_path = PathBuf::from("proof").join(format!(
-                    "agg.proof#{}",
+                    "agg-proof#{}",
                     path.clone().file_name().unwrap().to_str().unwrap()
                 ));
                 proof.write_to_dir(&mut proof_path);
@@ -40,7 +40,7 @@ async fn main() {
                 log::info!("prove err: {:#?}", e);
             }
         };
-        std::thread::sleep(Duration::from_millis(4000))
+        std::thread::sleep(Duration::from_millis(10000))
     }
 }
 
