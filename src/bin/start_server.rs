@@ -26,7 +26,7 @@ struct ProveRequest {
     rpc: String,
 }
 
-const PROVER_FOR_TRACES: &'static str = "target/release/prove";
+const PROVER_FOR_TRACES: &'static str = "target/release/prover";
 const FS_TRACES_PROCESSING: &'static str = "traces/processing";
 const FS_TRACES_PROVED: &'static str = "traces/proved";
 const FS_PROOF: &'static str = "proof";
@@ -44,17 +44,15 @@ async fn main() {
     fs::create_dir_all(FS_PROOF).unwrap();
 
     //start prover
-    let (tx, rx) = channel();
-    let status = true;
-    let prove_status = Arc::new(Mutex::new(status));
-    prove_for_trace(tx, rx, Arc::clone(&prove_status));
+    let status = Arc::new(Mutex::new(true));
+    prove_for_trace(Arc::clone(&status));
 
     //start mng
     let service = Router::new()
         .route("/prove_block", post(download_trace))
         .route("/download_proof", post(download_trace))
-        .route("/status", post(download_trace))
-        .layer(AddExtensionLayer::new(Arc::clone(&prove_status)))
+        .route("/status", post(prover_status))
+        .layer(AddExtensionLayer::new(Arc::clone(&status)))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 
@@ -64,18 +62,18 @@ async fn main() {
         .unwrap();
 }
 
-fn prove_for_trace(sender: Sender<String>, rx: Receiver<String>, prove_status: Arc<Mutex<bool>>) {
-    task::spawn(prove_process(sender));
-    task::spawn(async {
-        for line in rx {
-            println!("prover: {}", line);
-        }
-    });
+/**
+ * prove
+ */
+fn prove_for_trace(prove_status: Arc<Mutex<bool>>) {
+    task::spawn(prove_process());
+
     task::spawn(async move {
         loop {
-            let traces_dir = fs::read_dir("traces/processing").unwrap();
-            let file = traces_dir.last().unwrap().unwrap().path().is_file();
-            if !file {
+            let traces_dir = fs::read_dir(FS_TRACES_PROCESSING).unwrap();
+            if traces_dir.last().is_some() {
+                *prove_status.lock().unwrap() = true;
+            } else {
                 *prove_status.lock().unwrap() = false;
             }
             std::thread::sleep(Duration::from_millis(10000))
@@ -83,26 +81,18 @@ fn prove_for_trace(sender: Sender<String>, rx: Receiver<String>, prove_status: A
     });
 }
 
-async fn prove_process(sender: Sender<String>) {
+async fn prove_process() {
     //start prover process
-    let mut prover_bin = Command::new(PROVER_FOR_TRACES).spawn().unwrap();
-    prover_bin.wait().unwrap();
-    let mut f = BufReader::new(prover_bin.stdout.unwrap());
-    loop {
-        let mut buf = String::new();
-        match f.read_line(&mut buf) {
-            Ok(_) => {
-                sender.send(buf).unwrap();
-                continue;
-            }
+    Command::new(PROVER_FOR_TRACES).spawn().unwrap();
+    log::info!("starting prove_process");
+}
 
-            Err(e) => {
-                println!("an error!: {:?}", e);
-                break;
-            }
-        }
+async fn prover_status(Extension(status): Extension<Arc<Mutex<bool>>>) -> String {
+    if *status.lock().unwrap() {
+        return String::from("busy");
+    } else {
+        return String::from("idle");
     }
-    println!("prover_bin end");
 }
 
 /**
@@ -121,12 +111,13 @@ async fn download_trace(param: String) -> String {
     )
     .await;
     if block_traces.is_none() {
+        log::error!("fetch block trace fail");
         return String::from("fetch block trace fail");
     }
 
     //save traces
     let traces_path =
-        PathBuf::from("traces").join(format!("block#{}.json", prove_request.block_num));
+        PathBuf::from(FS_TRACES_PROCESSING).join(format!("block#{}.json", prove_request.block_num));
     let mut traces_file = File::create(traces_path).unwrap();
     let save = traces_file.write_all(
         serde_json::to_string(&block_traces.unwrap().last())
@@ -143,18 +134,4 @@ async fn download_trace(param: String) -> String {
             String::from("save trace fail")
         }
     }
-}
-
-/**
- * Prove service.
- * Handle Prove Request, Use Layer2's rpc address and block number to fetch trace and generate zk proof.
- */
-async fn add_queue(
-    Extension(queue): Extension<Arc<Mutex<Vec<ProveRequest>>>>,
-    param: String,
-) -> String {
-    //step 1. fetch block trace
-    let prove_request: ProveRequest = serde_json::from_str(param.as_str()).unwrap();
-    queue.lock().unwrap().push(prove_request);
-    String::from("success")
 }

@@ -29,5 +29,5 @@ fn main() {
     //create aggregator circut param
     load_or_create_params(path.as_str(), *AGG_DEGREE).expect("failed to load or create agg-kzg params");
     //create seed
-    load_or_create_seed(path.as_str()).expect("failed to load or create seed");
+    load_or_create_seed("./prove_seed").expect("failed to load or create seed");
 }

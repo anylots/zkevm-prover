@@ -37,7 +37,7 @@ async fn main() {
                     path.file_name().unwrap().to_str().unwrap())).unwrap();
             }
             Err(e) => {
-                log::info!("prove err: {:#?}", e);
+                log::error!("prove err: {:#?}", e);
             }
         };
         std::thread::sleep(Duration::from_millis(10000))
