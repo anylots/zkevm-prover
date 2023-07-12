@@ -1,4 +1,3 @@
-
 use ethers::providers::{Http, Provider};
 use types::eth::BlockTrace;
 
@@ -10,11 +9,13 @@ pub async fn get_block_traces_by_number(
     let mut block_traces: Vec<BlockTrace> = Vec::new();
     for i in block_start..block_end {
         log::info!("zkevm-prover: requesting trace of block {i}");
-        let trace = provider
+        let result = provider
             .request("scroll_getBlockTraceByNumberOrHash", [format!("{i:#x}")])
-            .await
-            .unwrap();
-        block_traces.push(trace);
+            .await;
+        match result {
+            Ok(trace) => block_traces.push(trace),
+            Err(e) => log::error!("zkevm-prover: requesting trace error: {e}"),
+        }
     }
     Some(block_traces)
 }
