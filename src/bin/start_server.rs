@@ -77,49 +77,49 @@ async fn prove_for_queue(prove_queue: Arc<Mutex<Vec<ProveRequest>>>) {
     //step 1. create prover
     let mut prover = Prover::from_fpath(FS_PROOF_PARAMS, FS_PROVE_SEED);
     loop {
-        if let Some(req) = prove_queue.lock().await.pop() {
-            //step 2. load request from queue
-            let provider = match Provider::try_from(req.rpc) {
-                Ok(provider) => provider,
-                Err(e) => {
-                    log::error!("Failed to init provider: {:#?}", e);
-                    continue;
-                }
-            };
-
-            let traces = match utils::get_block_traces_by_number(
-                &provider,
-                req.block_num,
-                req.block_num + 1,
-            )
-            .await
-            {
-                Some(traces) => traces,
-                None => {
-                    log::error!("Failed to get traces");
-                    continue;
-                }
-            };
-
-            //step 3. start prove
-            log::info!("start prove, block num is: {:#?}", req.block_num);
-            let proof = match prover.create_agg_circuit_proof_batch(traces.as_slice()) {
-                Ok(proof) => {
-                    log::info!("the prove result is: {:#?}", proof);
-                    proof
-                }
-                Err(e) => {
-                    log::error!("prove err: {:#?}", e);
-                    continue;
-                }
-            };
-            log::info!("end prove, block num is: {:#?}", req.block_num);
-
-            //step 4. save proof
-            let mut proof_path =
-                PathBuf::from(FS_PROOF).join(format!("agg-proof#block#{}", req.block_num));
-            proof.write_to_dir(&mut proof_path);
+        //step 2. load request from queue
+        let queue = prove_queue.lock().await.pop();
+        if queue.is_none() {
+            continue;
         }
+        let prove_request: ProveRequest = queue.unwrap();
+        let provider = match Provider::try_from(req.rpc) {
+            Ok(provider) => provider,
+            Err(e) => {
+              log::error!("Failed to init provider: {:#?}", e);
+              continue;
+            }
+          };    
+
+        let block_traces = utils::get_block_traces_by_number(
+            &provider,
+            prove_request.block_num,
+            prove_request.block_num + 1,
+        )
+        .await
+        .unwrap();
+        if block_traces.is_empty() {
+            continue;
+        }
+
+        //step 3. start prove
+        log::info!("start prove, block num is: {:#?}", prove_request.block_num);
+        let proof = match prover.create_agg_circuit_proof_batch(block_traces.as_slice()) {
+            Ok(proof) => {
+                log::info!("the prove result is: {:#?}", proof);
+                proof
+            }
+            Err(e) => {
+                log::error!("prove err: {:#?}", e);
+                continue;
+            }
+        };
+        log::info!("end prove, block num is: {:#?}", prove_request.block_num);
+
+        //step 4. save proof
+        let mut proof_path =
+            PathBuf::from(FS_PROOF).join(format!("agg-proof#block#{}", prove_request.block_num));
+        proof.write_to_dir(&mut proof_path);
 
         thread::sleep(Duration::from_millis(2000))
     }
