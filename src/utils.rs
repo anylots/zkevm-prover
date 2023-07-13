@@ -1,6 +1,10 @@
 use ethers::providers::{Http, Provider};
 use types::eth::BlockTrace;
 
+pub const FS_PROVE_PARAMS: &'static str = "prove_params";
+pub const FS_PROVE_SEED: &'static str = "prove_seed";
+pub const FS_PROOF: &'static str = "proof";
+
 pub async fn get_block_traces_by_number(
     provider: &Provider<Http>,
     block_start: u64,

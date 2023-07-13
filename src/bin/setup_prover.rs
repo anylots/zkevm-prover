@@ -1,8 +1,9 @@
 use clap::Parser;
 use zkevm::{
-    circuit::{DEGREE, AGG_DEGREE},
+    circuit::{AGG_DEGREE, DEGREE},
     utils::{load_or_create_params, load_or_create_seed},
 };
+use zkevm_prover::utils::{FS_PROVE_PARAMS, FS_PROVE_SEED};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -20,14 +21,19 @@ fn main() {
     env_logger::init();
 
     let args = Args::parse();
-    let path = match args.params_path {
+    let params_path = match args.params_path {
         Some(path) => path,
-        None => String::from("prove_params"),
+        None => String::from(FS_PROVE_PARAMS),
+    };
+    let seed_path = match args.seed_path {
+        Some(path) => path,
+        None => String::from(FS_PROVE_SEED),
     };
     //create super circut param
-    load_or_create_params(path.as_str(), *DEGREE).expect("failed to load or create params");
+    load_or_create_params(params_path.as_str(), *DEGREE).expect("failed to load or create params");
     //create aggregator circut param
-    load_or_create_params(path.as_str(), *AGG_DEGREE).expect("failed to load or create agg-kzg params");
+    load_or_create_params(params_path.as_str(), *AGG_DEGREE)
+        .expect("failed to load or create agg-kzg params");
     //create seed
-    load_or_create_seed(path.as_str()).expect("failed to load or create seed");
+    load_or_create_seed(seed_path.as_str()).expect("failed to load or create seed");
 }
