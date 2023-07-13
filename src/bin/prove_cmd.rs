@@ -15,8 +15,17 @@ use zkevm::{
 use zkevm_prover::utils;
 
 
+// Used to generate poof for specified blocks in the development environment.
+// It will read the cmd parameters and execute the following process.
+// Main flow:
+// 1. Init env 
+// 2. Fetch block traces
+// 3. Create prover 
+// 4. Generate proof
+// 5. Write proof & verifier
 #[tokio::main]
 async fn main() {
+    // Step1. prepare param
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let block_num: u64 = var("PROVERD_BLOCK_NUM")
         .expect("PROVERD_BLOCK_NUM env var")
@@ -34,7 +43,7 @@ async fn main() {
     let provider = Provider::<Http>::try_from(rpc_url)
         .expect("failed to initialize ethers Provider");
 
-    //step 1. fetch block trace
+    // Step 2. fetch block trace
     let block_traces = utils::get_block_traces_by_number(&provider, block_num, block_num + 1)
         .await
         .unwrap();
@@ -43,20 +52,20 @@ async fn main() {
 
     log::info!("block_traces_chain_id is: {:#?}", block_traces[0].chain_id);
 
-    //step 2. create prover
+    // Step 3. create prover
     let mut prover = create_prover(params_path);
 
-    //step 3. start prove
+    // Step 4. start prove
     let block_trace_array = block_traces.as_slice();
     let result = prover.create_agg_circuit_proof_batch(block_trace_array);
     match result {
         Ok(proof) => {
             log::info!("prove result is: {:#?}", proof);
-            //save proof
+            // Save proof
             let mut proof_path = PathBuf::from("./proof").join("agg.proof");
             fs::create_dir_all(&proof_path).unwrap();
             proof.write_to_dir(&mut proof_path);
-            //save verify contract
+            // Save verify contract
             let solidity = prover.create_solidity_verifier(&proof);
             log::info!("verify solidity is: {:#?}", solidity);
 
@@ -70,7 +79,7 @@ async fn main() {
 }
 
 /**
- * create prover of zkevm
+ * Create prover of zkevm
  */
 fn create_prover(params_path: String) -> Prover {
 
